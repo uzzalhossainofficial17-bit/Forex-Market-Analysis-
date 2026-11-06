@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forex Signal Desk</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#d5dce3;--buy:#0e8a5f;--sell:#c2342f;--wait:#8a6d1f;--acc:#1f5fbf;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10171e;--card:#18222c;--ink:#e6ecf1;--mute:#93a1ae;--line:#2b3947;--buy:#3ccf91;--sell:#ff6b63;--wait:#e3bf5a;--acc:#6fa5ff}}
+:root[data-theme="dark"]{--bg:#10171e;--card:#18222c;--ink:#e6ecf1;--mute:#93a1ae;--line:#2b3947;--buy:#3ccf91;--sell:#ff6b63;--wait:#e3bf5a;--acc:#6fa5ff}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Figtree,system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px 14px 40px}
+h1{font-size:22px;font-weight:800;margin:4px 0 2px}
+.sub{color:var(--mute);margin:0 0 14px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:3px;flex:1 1 90px}
+input,select,textarea,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+textarea{width:100%;min-height:70px;font:12px/1.4 'JetBrains Mono',monospace;margin-top:8px}
+button{cursor:pointer;font-weight:600}
+button.go{background:var(--acc);color:#fff;border-color:var(--acc)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.sess{display:flex;height:46px;border-radius:6px;overflow:hidden;border:1px solid var(--line);font-size:11px}
+.sess div{display:flex;align-items:center;justify-content:center;color:var(--mute);border-right:1px solid var(--line);position:relative}
+.sess div.on{background:var(--acc);color:#fff;font-weight:600}
+.sig{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.big{font-size:44px;font-weight:800;letter-spacing:-1px;line-height:1}
+.BUY{color:var(--buy)}.SELL{color:var(--sell)}.WAIT{color:var(--wait)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}
+.grid div{border:1px solid var(--line);border-radius:6px;padding:8px}
+.grid small{display:block;color:var(--mute);font-size:11px}
+.grid b{font:500 15px 'JetBrains Mono',monospace}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tags span{border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-size:12px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+svg{width:100%;height:auto;display:block}
+.note{font-size:12px;color:var(--mute)}
+h2{font-size:15px;margin:0 0 8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Forex Signal Desk</h1>
+<p class="sub">Buy/Sell signal, entry, stop, targets and session-wise logic. Times are shown in Bangladesh time (UTC+6). Runs in your browser.</p>
+
+<div class="card">
+  <div class="row">
+    <label>Pair<select id="pair"><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option><option>USDCHF</option><option>AUDUSD</option><option>USDCAD</option><option>NZDUSD</option></select></label>
+    <label>Account $<input id="acct" type="number" value="20"></label>
+    <label>Risk per trade $<input id="risk" type="number" step="0.5" min="0.5" value="2"></label>
+    <label>SL (× ATR)<input id="slm" type="number" step="0.1" value="1.5"></label>
+  </div>
+  <textarea id="csv" placeholder="Paste candles here: time,open,high,low,close (times in UTC, 15-minute works best; the page shows Bangladesh time). Leave empty to use demo data."></textarea>
+  <div class="row" style="margin-top:8px">
+    <input type="file" id="file" accept=".csv,.txt" style="flex:1 1 150px">
+    <button class="go" id="run">Analyse</button>
+    <button id="demo">New demo data</button>
+  </div>
+  <p class="note" style="margin:8px 0 0">Live prices can’t load inside this page. Export candles from MT4/MT5 or TradingView and paste them above.</p>
+</div>
+
+<div class="card"><h2>All major pairs</h2><div class="scroll" id="scan"></div><p class="note" style="margin:8px 0 0">Tap a pair for its full chart. Each mini chart shows the green profit zone and red risk zone. ★ marks the most active pairs in the current session. To scan a pair with real candles, choose it above, paste its CSV and press Analyse.</p></div>
+<div class="card"><h2>Sessions (Bangladesh time) <span id="clock" class="note"></span></h2><div class="sess" id="sess"></div><div id="sinfo" class="note" style="margin-top:8px"></div></div>
+
+<div class="card" id="out"></div>
+<div class="card"><h2>Chart</h2><svg id="chart" viewBox="0 0 700 380"></svg><p class="note" style="margin:8px 0 0">Right axis shows prices. The green box is your profit zone (Entry to TP2) and the red box is your risk zone (Entry to SL), like a long/short position tool. Dotted lines mark the nearest resistance and support. ✓ target hit, ✗ stop hit, – timeout on past trades. Strip under the chart: purple Asian, blue London, teal overlap, orange New York.</p></div>
+<div class="card"><h2>Account growth plan</h2><div id="sim"></div></div>
+<div class="card"><h2>Day result</h2><div class="row"><label style="max-width:180px">Day (BD time)<select id="day"></select></label></div><div id="dr" style="margin-top:10px"></div></div>
+<div class="card"><h2>Backtest by session</h2><div class="scroll" id="bt"></div>
+<p class="note">Each signal is tested with a 1.5R target and a 12-hour timeout. Past results don’t predict future trades.</p></div>
+<p class="note">Educational tool, not financial advice. Test on a demo account first.</p>
+</main>
+
+<script>
+const SESS=[["Asian",21,7,"Asian"],["London",7,12,"London"],["Overlap",12,16,"London + NY"],["New York",16,21,"New York"]];
+const MINSC={Asian:4,London:3,Overlap:3,"New York":3};
+const BEST={Asian:"USDJPY, AUDUSD, NZDUSD, EURJPY",London:"EURUSD, GBPUSD, EURGBP, USDCHF",Overlap:"EURUSD, GBPUSD, USDCHF, USDCAD","New York":"EURUSD, GBPUSD, USDCAD, XAUUSD"};
+const $=id=>document.getElementById(id);
+let STEP=9e5;
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const bdt=t=>new Date(t+216e5);
+const tm=t=>{const x=bdt(t),h=x.getUTCHours();return (h%12||12)+":"+String(x.getUTCMinutes()).padStart(2,"0")+" "+(h<12?"AM":"PM")};
+const dt=t=>{const x=bdt(t);return x.getUTCDate()+" "+MON[x.getUTCMonth()]};
+const full=t=>{const x=bdt(t);return DOW[x.getUTCDay()]+", "+dt(t)+" "+x.getUTCFullYear()+", "+tm(t)};
+const bdDay=t=>bdt(t).toISOString().slice(0,10);
+const h12=h=>{h=(h+6)%24;return (h%12||12)+(h<12?"AM":"PM")};
+const slDist=(r,k)=>{const a=r.atr,m=+$("slm").value/1.5,st=k>0?r.c-(r.sl12-.2*a):(r.sh12+.2*a)-r.c;return Math.min(Math.max(st,a*m),a*m*2.5)};
+const sessOf=h=>h>=12&&h<16?"Overlap":h>=7&&h<12?"London":h>=16&&h<21?"New York":"Asian";
+
+// ---------- indicators ----------
+const ema=(a,n)=>{const k=2/(n+1);let p=a[0];return a.map((v,i)=>i?(p=v*k+p*(1-k)):p)};
+const rma=(a,n)=>{let p=a[0];return a.map((v,i)=>i?(p=p+(v-p)/n):p)};
+function indicators(d){
+  const c=d.map(x=>x.c),n=d.length;
+  const e20=ema(c,20),e50=ema(c,50),e200=ema(c,200);
+  const ch=c.map((v,i)=>i?v-c[i-1]:0);
+  const ru=rma(ch.map(x=>Math.max(x,0)),14),rd=rma(ch.map(x=>Math.max(-x,0)),14);const rs=ru.map((u,i)=>100-100/(1+u/(rd[i]||1e-12)));
+  const e12=ema(c,12),e26=ema(c,26);const m=e12.map((v,i)=>v-e26[i]);const sig=ema(m,9);const mh=m.map((v,i)=>v-sig[i]);
+  const tr=d.map((x,i)=>i?Math.max(x.h-x.l,Math.abs(x.h-d[i-1].c),Math.abs(x.l-d[i-1].c)):x.h-x.l);
+  const at=rma(tr,14);
+  const up=d.map((x,i)=>i?x.h-d[i-1].h:0),dn=d.map((x,i)=>i?d[i-1].l-x.l:0);
+  const pdm=rma(up.map((u,i)=>u>dn[i]&&u>0?u:0),14),mdm=rma(dn.map((v,i)=>v>up[i]&&v>0?v:0),14);
+  const dx=pdm.map((p,i)=>{const pi=100*p/at[i],mi=100*mdm[i]/at[i];return 100*Math.abs(pi-mi)/((pi+mi)||1)});
+  const ad=rma(dx,14);
+  const hk=d.map(x=>Math.floor(x.t/36e5)),hc=[],hks=[];
+  d.forEach((x,i)=>{if(hks[hks.length-1]!==hk[i]){hks.push(hk[i]);hc.push(x.c)}else hc[hc.length-1]=x.c});
+  const h20=ema(hc,20),h50=ema(hc,50),hidx={};hks.forEach((k,i)=>hidx[k]=i);
+  // Asian range per UTC day (00-07)
+  const rng={};d.forEach(x=>{const dt=new Date(x.t),h=dt.getUTCHours();if(h<7){const k=dt.toISOString().slice(0,10);const r=rng[k]||(rng[k]={hi:-1e9,lo:1e9});r.hi=Math.max(r.hi,x.h);r.lo=Math.min(r.lo,x.l)}});
+  return d.map((x,i)=>{const dt=new Date(x.t),r=rng[dt.toISOString().slice(0,10)],hi=hidx[hk[i]]-1;
+    const w12=d.slice(Math.max(0,i-12),i),w48=d.slice(Math.max(0,i-48),i),am=at.slice(Math.max(0,i-100),i+1).sort((a,b)=>a-b)[Math.floor(Math.min(i,100)/2)];
+    const mx=(w,k,f)=>w.length?Math[f](...w.map(y=>y[k])):x[k];
+    return {...x,e20:e20[i],e50:e50[i],e200:e200[i],rsi:rs[i],mh:mh[i],atr:at[i],adx:ad[i],ses:sessOf(dt.getUTCHours()),ah:r?.hi,al:r?.lo,
+      h1:hi>=50?(h20[hi]>h50[hi]?1:-1):0,sh12:mx(w12,"h","max"),sl12:mx(w12,"l","min"),res48:mx(w48,"h","max"),sup48:mx(w48,"l","min"),am,wd:dt.getUTCDay(),hr:dt.getUTCHours()}});
+}
+
+// ---------- signal ----------
+function score(r,p){
+  let s=0;const w=[];
+  if(r.e20>r.e50&&r.e50>r.e200){s+=2;w.push("Uptrend EMA stack")}else if(r.e20<r.e50&&r.e50<r.e200){s-=2;w.push("Downtrend EMA stack")}
+  if(r.mh>0&&r.mh>p.mh){s++;w.push("MACD rising")}else if(r.mh<0&&r.mh<p.mh){s--;w.push("MACD falling")}
+  if(r.rsi>50&&r.rsi<70){s++;w.push("RSI bullish")}else if(r.rsi<50&&r.rsi>30){s--;w.push("RSI bearish")}
+  if(r.rsi>=75){s--;w.push("RSI overbought")}if(r.rsi<=25){s++;w.push("RSI oversold")}
+  if((r.ses==="London"||r.ses==="Overlap")&&r.ah!=null&&r.ah>-1e8){
+    if(r.c>r.ah){s+=2;w.push("Broke Asian high")}else if(r.c<r.al){s-=2;w.push("Broke Asian low")}}
+  const q=pat(r,p);if(q){s+=q[1];w.push((q[1]>0?"Bullish ":"Bearish ")+q[0])}
+  if(r.h1){s+=r.h1;w.push(r.h1>0?"H1 trend up":"H1 trend down")}
+  if((s>0&&r.h1<0)||(s<0&&r.h1>0)){s=Math.trunc(s/2);w.push("Against H1 trend")}
+  const dr=r.res48-r.c,ds=r.c-r.sup48;
+  if(s>0&&dr>=0&&dr<.6*r.atr){s--;w.push("Near resistance")}
+  if(s<0&&ds>=0&&ds<.6*r.atr){s++;w.push("Near support")}
+  if(r.adx<18){s=Math.trunc(s*.5);w.push("Weak trend (ADX<18)")}
+  if(r.atr<.6*r.am){s=Math.trunc(s*.5);w.push("Low volatility")}
+  if(r.wd===5&&r.hr>=19){s=0;w.push("Friday late: avoid")}
+  return [s,w];
+}
+const dec=p=>/JPY/i.test(p)?3:5;
+function lot(pair,dist){const pip=/JPY/i.test(pair)?.01:.0001;return Math.max(.01,Math.floor(+$("risk").value/((dist/pip)*10)*100)/100)}
+function analyse(d,pair){
+  const r=d[d.length-1],p=d[d.length-2],[s,w]=score(r,p),need=MINSC[r.ses]||99;
+  const side=s>=need?"BUY":s<=-need?"SELL":"WAIT";
+  const o={r,s,w,side,need};
+  if(side!=="WAIT"){const k=side==="BUY"?1:-1,dist=slDist(r,k);
+    Object.assign(o,{entry:r.c,sl:r.c-k*dist,tp1:r.c+k*dist*1.5,tp2:r.c+k*dist*3,lot:lot(pair,dist),real:lot(pair,dist)*(dist/(/JPY/i.test(pair)?.01:.0001))*10})}
+  return o;
+}
+
+// ---------- backtest ----------
+function backtest(d){
+  const t={},tr=[];let i=201;const mult=+$("slm").value;
+  while(i<d.length-2){
+    const [s]=score(d[i],d[i-1]),need=MINSC[d[i].ses]||99;
+    if(Math.abs(s)>=need){
+      const k=s>0?1:-1,dist=slDist(d[i],k),sl=d[i].c-k*dist,tp=d[i].c+k*dist*1.5;let res=0,j=i+1;
+      for(;j<Math.min(i+48,d.length);j++){
+        if((k>0&&d[j].l<=sl)||(k<0&&d[j].h>=sl)){res=-1;break}
+        if((k>0&&d[j].h>=tp)||(k<0&&d[j].l<=tp)){res=1.5;break}}
+      (t[d[i].ses]=t[d[i].ses]||[]).push(res);tr.push({i,k,e:d[i].c,sl,tp,j:Math.min(j,d.length-1),res});i=j+1;
+    }else i++;
+  }
+  return {t,tr};
+}
+
+// ---------- data ----------
+function rnd(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function demo(base=1.10){
+  const R=rnd(Math.floor(Math.random()*1e9)),n=1500,step=15*60000,end=Math.floor(Date.now()/step)*step,s=base/1.10;
+  const out=[];let c=base;
+  for(let i=0;i<n;i++){const o=c;c=o+(R()-.495)*.0009*s;out.push({t:end-(n-1-i)*step,o,h:Math.max(o,c)+R()*.0003*s,l:Math.min(o,c)-R()*.0003*s,c})}
+  return out;
+}
+function parse(txt){
+  const out=[];
+  txt.split(/\r?\n/).forEach(l=>{const a=l.split(/[,;\t]/).map(x=>x.trim());if(a.length<5)return;
+    let ts=a[0];if(/^\d{4}[-./]\d{2}[-./]\d{2}/.test(ts)){ts=ts.replace(/\./g,"-").replace(" ","T");if(!/[zZ]|[+-]\d\d:?\d\d$/.test(ts))ts+="Z"}
+    const t=/^\d+$/.test(ts)?(ts.length<12?ts*1000:+ts):Date.parse(ts);
+    const v=a.slice(1,5).map(Number);if(isNaN(t)||v.some(isNaN))return;out.push({t,o:v[0],h:v[1],l:v[2],c:v[3]})});
+  return out.sort((x,y)=>x.t-y.t);
+}
+
+// ---------- render ----------
+function drawSess(cur){
+  $("sess").innerHTML=SESS.map(s=>`<div class="${s[0]===cur?"on":""}" style="flex:${(s[2]-s[1]+24)%24||1}" title="${s[3]}"><span style="text-align:center;line-height:1.25">${s[0]}<br><span style="font-size:10px">${h12(s[1])}–${h12(s[2])}</span></span></div>`).join("");
+  $("sinfo").innerHTML=SESS.map(s=>`<div${s[0]===cur?' style="color:var(--ink);font-weight:600"':""}>${s[0]} ${h12(s[1])}–${h12(s[2])}: ${BEST[s[0]]}</div>`).join("");
+}
+const SC={Asian:"#9b7bd0",London:"#4a90d9",Overlap:"#2fb5a0","New York":"#e08a3c"};
+function swings(v,k=5){const hi=[],lo=[];for(let i=k;i<v.length-k;i++){let a=true,b=true;for(let j=i-k;j<=i+k;j++){if(v[j].h>v[i].h)a=false;if(v[j].l<v[i].l)b=false}if(a)hi.push(v[i].h);if(b)lo.push(v[i].l)}return{hi,lo}}
+function srLevels(d){const s=swings(d.slice(-100)),c=d[d.length-1].c;
+  return{res:s.hi.filter(p=>p>c).sort((a,b)=>a-b)[0],sup:s.lo.filter(p=>p<c).sort((a,b)=>b-a)[0]}}
+function pat(x,p){const b=Math.abs(x.c-x.o),r=x.h-x.l||1e-9,u=x.h-Math.max(x.o,x.c),w=Math.min(x.o,x.c)-x.l;
+  if(x.c>x.o&&p.c<p.o&&x.c>=p.o&&x.o<=p.c)return["Bull Eng",1];
+  if(x.c<x.o&&p.c>p.o&&x.c<=p.o&&x.o>=p.c)return["Bear Eng",-1];
+  if(b/r>.1&&w>2*b&&u<b)return["Hammer",1];
+  if(b/r>.1&&u>2*b&&w<b)return["S.Star",-1];
+  return null}
+function chart(d,o,tr){
+  const N=100,v=d.slice(-N),off=d.length-N,W=700,H=380,AX=66,PJ=130,pt=8,pb=34;
+  const pair=($("pair").value||"").toUpperCase(),D=dec(pair),pip=/JPY/i.test(pair)?.01:.0001,sr=srLevels(d);
+  const lv=o.entry?[o.sl,o.tp2]:[];
+  let hi=Math.max(...v.map(x=>x.h),...lv),lo=Math.min(...v.map(x=>x.l),...lv);const m=(hi-lo)*.04;hi+=m;lo-=m;
+  const cw=(W-AX-PJ-6)/N,bw=cw*.7,px=W-AX,X=i=>4+i*cw+cw/2,Y=p=>pt+(hi-p)/(hi-lo)*(H-pt-pb);
+  const BUY="#0e8a5f",SELL="#c2342f",ENT="#4b5b6b",CUR="#1f5fbf";
+  const tag=(p,c)=>`<rect x="${px}" y="${Y(p)-8}" width="${AX}" height="16" rx="3" fill="${c}"/><text x="${px+4}" y="${Y(p)+4}" font-size="10" fill="#fff">${p.toFixed(D)}</text>`;
+  let g="";
+  for(let i=0;i<=5;i++){const p=lo+(hi-lo)*i/5;g+=`<line x1="0" x2="${px}" y1="${Y(p)}" y2="${Y(p)}" stroke="var(--line)" stroke-width=".6"/><text x="${px+4}" y="${Y(p)+3}" font-size="10" fill="var(--mute)">${p.toFixed(D)}</text>`}
+  v.forEach((x,i)=>{g+=`<rect x="${X(i)-cw/2}" y="${H-pb+4}" width="${cw}" height="5" fill="${SC[x.ses]}"/>`;
+    if(i%20===0)g+=`<text x="${X(i)}" y="${H-6}" font-size="10" text-anchor="middle" fill="var(--mute)">${dt(x.t)} ${tm(x.t)}</text>`});
+  if(sr.res)g+=`<line x1="0" x2="${px}" y1="${Y(sr.res)}" y2="${Y(sr.res)}" stroke="${SELL}" stroke-dasharray="2 4"/><text x="6" y="${Y(sr.res)-3}" font-size="10" fill="${SELL}">Resistance ${sr.res.toFixed(D)}</text>`;
+  if(sr.sup)g+=`<line x1="0" x2="${px}" y1="${Y(sr.sup)}" y2="${Y(sr.sup)}" stroke="${BUY}" stroke-dasharray="2 4"/><text x="6" y="${Y(sr.sup)+11}" font-size="10" fill="${BUY}">Support ${sr.sup.toFixed(D)}</text>`;
+  const x0=X(N-1)+cw/2+2,bx=px-x0-4;
+  if(o.entry){
+    const z=(a,b,c)=>`<rect x="${x0}" y="${Math.min(Y(a),Y(b))}" width="${bx}" height="${Math.abs(Y(a)-Y(b))}" fill="${c}" opacity=".22"/>`;
+    g+=z(o.entry,o.tp2,BUY)+z(o.entry,o.sl,SELL);
+  }
+  g+=v.map((x,i)=>{const c=x.c>=x.o?BUY:SELL;return `<line x1="${X(i)}" x2="${X(i)}" y1="${Y(x.h)}" y2="${Y(x.l)}" stroke="${c}"/><rect x="${X(i)-bw/2}" y="${Y(Math.max(x.o,x.c))}" width="${bw}" height="${Math.max(1,Math.abs(Y(x.o)-Y(x.c)))}" fill="${c}"/>`}).join("");
+  const line=(k,c)=>`<polyline fill="none" stroke="${c}" stroke-width="1.3" opacity=".8" points="${v.map((x,i)=>X(i)+","+Y(x[k])).join(" ")}"/>`;
+  g+=line("e20","var(--acc)")+line("e50","var(--wait)");
+  v.forEach((x,i)=>{if(i<N-40||i<1)return;const q=pat(x,v[i-1]);if(q)g+=`<text x="${X(i)}" y="${q[1]>0?Y(x.l)+20:Y(x.h)-12}" font-size="8" text-anchor="middle" fill="${q[1]>0?BUY:SELL}">${q[1]>0?"▲":"▼"}${q[0]}</text>`});
+  const tri=(x,y,k,c)=>`<polygon points="${k>0?`${x-6},${y+10} ${x+6},${y+10} ${x},${y}`:`${x-6},${y-10} ${x+6},${y-10} ${x},${y}`}" fill="${c}" stroke="var(--card)"/>`;
+  tr.filter(t=>t.j>=off).forEach(t=>{
+    const ei=t.i-off,xi=t.j-off,k=t.k,c=k>0?BUY:SELL,pr=t.res>0?t.tp:t.res<0?t.sl:d[t.j].c,rc=t.res>0?BUY:t.res<0?SELL:"#8a96a2";
+    if(ei>=0){g+=`<line x1="${X(ei)}" y1="${Y(t.e)}" x2="${X(xi)}" y2="${Y(pr)}" stroke="${rc}" stroke-dasharray="3 3"/>`+tri(X(ei),k>0?Y(d[t.i].l)+3:Y(d[t.i].h)-3,k,c)}
+    g+=`<circle cx="${X(xi)}" cy="${Y(pr)}" r="7" fill="${rc}" stroke="var(--card)"/><text x="${X(xi)}" y="${Y(pr)+4}" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">${t.res>0?"✓":t.res<0?"✗":"–"}</text>`});
+  if(o.entry){
+    const k=o.side==="BUY"?1:-1,r=d[d.length-1],pp=p=>(Math.abs(p-o.entry)/pip).toFixed(1),R=p=>(Math.abs(p-o.entry)/Math.abs(o.entry-o.sl)).toFixed(1);
+    const ly=p=>Y(p)+(p>o.entry?13:-5);
+    g+=tri(X(N-1),k>0?Y(r.l)+3:Y(r.h)-3,k,k>0?BUY:SELL);
+    g+=`<line x1="${x0}" x2="${x0+bx}" y1="${Y(o.tp1)}" y2="${Y(o.tp1)}" stroke="${BUY}" stroke-dasharray="4 3"/><text x="${x0+5}" y="${Y(o.tp1)+(o.tp1>o.entry?-3:11)}" font-size="9.5" fill="var(--ink)">TP1 +${pp(o.tp1)}p · ${R(o.tp1)}R</text>`;
+    g+=`<line x1="${x0}" x2="${x0+bx}" y1="${Y(o.tp2)}" y2="${Y(o.tp2)}" stroke="${BUY}" stroke-width="1.5"/><text x="${x0+5}" y="${ly(o.tp2)}" font-size="9.5" font-weight="700" fill="var(--ink)">TP2 +${pp(o.tp2)}p · ${R(o.tp2)}R</text>`;
+    g+=`<line x1="${x0}" x2="${x0+bx}" y1="${Y(o.sl)}" y2="${Y(o.sl)}" stroke="${SELL}" stroke-width="1.5"/><text x="${x0+5}" y="${ly(o.sl)}" font-size="9.5" font-weight="700" fill="var(--ink)">SL −${pp(o.sl)}p · −1R</text>`;
+    g+=`<line x1="0" x2="${x0+bx}" y1="${Y(o.entry)}" y2="${Y(o.entry)}" stroke="${ENT}" stroke-width="1.2"/><text x="${x0+5}" y="${Y(o.entry)-3}" font-size="9.5" fill="var(--ink)">${o.side} entry</text>`;
+    g+=tag(o.tp2,BUY)+tag(o.tp1,BUY)+tag(o.sl,SELL)+tag(o.entry,ENT);
+  }else{
+    const c=d[d.length-1].c;g+=`<line x1="0" x2="${px}" y1="${Y(c)}" y2="${Y(c)}" stroke="${CUR}" stroke-dasharray="4 3"/>`+tag(c,CUR);
+  }
+  $("chart").innerHTML=g;
+}
+function TB(o,r,d){const et=r.t+STEP,pair=$("pair").value;
+  const box=(l,m,n)=>`<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:12px"><small class="note">${l}</small><div style="font-size:19px;font-weight:800;line-height:1.3">${m}</div><div class="note">${n}</div></div>`;
+  return o.entry?box("ENTRY TIME · BANGLADESH (UTC+6)",full(et),`Candle closed at ${tm(et)}. Enter between ${tm(et)} and ${tm(et+2*STEP)}. Skip if price has moved more than ${(.5*r.atr).toFixed(dec(pair))} away from the entry.`):box("CHECKED AT · BANGLADESH (UTC+6)",full(et),`No entry now. Check again after ${tm(et+STEP)}.`)}
+function run(d){
+  const pair=($("pair").value||"PAIR").toUpperCase(),D=dec(pair);
+  if(d.length<230){$("out").innerHTML="<b>Need at least 230 candles.</b> Paste more rows (time,open,high,low,close).";return}
+  STEP=d[d.length-1].t-d[d.length-2].t;d=indicators(d);const o=analyse(d,pair),r=o.r,f=x=>x.toFixed(D);
+  drawSess(r.ses);$("clock").textContent="· last candle "+full(r.t);
+  let h=`<div class="sig"><span class="big ${o.side}">${o.side}</span><span><b>${pair}</b> @ ${f(r.c)}<br><span class="note">${r.ses} session · score ${o.s>0?"+":""}${o.s} (needs ±${o.need}) · ${Math.abs(o.s)>=o.need+2?"Strong":Math.abs(o.s)>=o.need?"Medium":"Weak"}</span></span></div>`;
+  h+=TB(o,r,d);
+  if(o.entry){h+=`<div class="grid"><div><small>Entry</small><b>${f(o.entry)}</b></div><div><small>Stop loss</small><b>${f(o.sl)}</b></div><div><small>Take profit 1 (1.5R)</small><b>${f(o.tp1)}</b></div><div><small>Take profit 2 (3R)</small><b>${f(o.tp2)}</b></div><div><small>Lot size</small><b>${o.lot}</b></div><div><small>Money at risk</small><b>$${o.real.toFixed(2)}</b></div><div><small>Profit at TP1 / TP2</small><b>+$${(o.real*1.5).toFixed(2)} / +$${(o.real*3).toFixed(2)}</b></div></div>
+  <p class="note" style="margin:10px 0 0"><b>Exit plan:</b> close half at TP1, move stop to breakeven, trail the rest to TP2. Exit early if EMA20 crosses EMA50 against you or the session ends (3:00 AM Bangladesh time).</p>`}
+  else{const sr=srLevels(d),dist=r.atr*+$("slm").value;
+    h+=`<p class="note" style="margin:10px 0 0">No trade now: signals are not strong enough for the ${r.ses} session.</p>`;
+    if(sr.res)h+=`<p style="margin:8px 0 0"><b class="BUY">Long plan:</b> enter if a candle closes above ${f(sr.res)}. SL ${f(sr.res-dist)}, TP1 ${f(sr.res+dist*1.5)}, TP2 ${f(sr.res+dist*3)}.</p>`;
+    if(sr.sup)h+=`<p style="margin:6px 0 0"><b class="SELL">Short plan:</b> enter if a candle closes below ${f(sr.sup)}. SL ${f(sr.sup+dist)}, TP1 ${f(sr.sup-dist*1.5)}, TP2 ${f(sr.sup-dist*3)}.</p>`}
+  h+=`<div class="tags">${o.w.map(x=>`<span>${x}</span>`).join("")}</div><p class="note" style="margin:10px 0 0">Most active pairs now: ${BEST[r.ses]}</p>`;
+  $("out").innerHTML=h;const B=backtest(d),bt=B.t;chart(d,o,B.tr);LAST={d,tr:B.tr,pair};fillDays();sim();let all=[];
+  const rows=Object.keys(bt).map(k=>{const a=bt[k];all=all.concat(a);return `<tr><td>${k}</td><td>${a.length}</td><td>${Math.round(100*a.filter(x=>x>0).length/a.length)}%</td><td>${a.reduce((x,y)=>x+y,0).toFixed(1)}R</td></tr>`}).join("");
+  $("bt").innerHTML=all.length?`<table><tr><th>Session</th><th>Trades</th><th>Win rate</th><th>Total</th></tr>${rows}<tr><td><b>All</b></td><td>${all.length}</td><td>${Math.round(100*all.filter(x=>x>0).length/all.length)}%</td><td><b>${all.reduce((x,y)=>x+y,0).toFixed(1)}R</b></td></tr></table>`:"<p class='note'>No trades triggered.</p>";
+}
+let LAST;
+function fillDays(){const ds=[...new Set(LAST.d.map(x=>bdDay(x.t)))].reverse(),sel=$("day"),keep=sel.value;
+  sel.innerHTML=ds.map(x=>`<option>${x}</option>`).join("");if(ds.includes(keep))sel.value=keep;showDay()}
+function showDay(){
+  const {d,tr,pair}=LAST,day=$("day").value,pip=/JPY/i.test(pair)?.01:.0001,f=x=>x.toFixed(dec(pair)),risk=+$("risk").value,hm=t=>dt(t)+" "+tm(t);
+  const T=tr.filter(t=>bdDay(d[t.i].t+STEP)===day);
+  if(!T.length){$("dr").innerHTML="<p class='note'>No trades triggered on this day.</p>";return}
+  let sp=0,sr=0,su=0,w=0;
+  const rows=T.map(t=>{const x=t.res>0?t.tp:t.res<0?t.sl:d[t.j].c,p=(x-t.e)*t.k/pip,R=(x-t.e)*t.k/Math.abs(t.e-t.sl),u=R*risk;sp+=p;sr+=R;su+=u;if(R>0)w++;
+    return `<tr><td>${hm(d[t.i].t+STEP)}</td><td>${d[t.i].ses}</td><td class="${t.k>0?"BUY":"SELL"}"><b>${t.k>0?"BUY":"SELL"}</b></td><td>${f(t.e)}</td><td>${f(x)} (${hm(d[t.j].t+STEP)})</td><td>${t.res>0?"TP hit":t.res<0?"SL hit":"Timeout"}</td><td class="${R>=0?"BUY":"SELL"}">${p>=0?"+":""}${p.toFixed(1)}</td><td>${R>=0?"+":""}${R.toFixed(2)}R</td><td class="${R>=0?"BUY":"SELL"}">${u>=0?"+":"−"}$${Math.abs(u).toFixed(2)}</td></tr>`}).join("");
+  const c=su>=0?"BUY":"SELL";
+  $("dr").innerHTML=`<div class="sig"><span class="big ${c}">${su>=0?"+":"−"}$${Math.abs(su).toFixed(2)}</span><span>${sp>=0?"+":""}${sp.toFixed(1)} pips · ${sr>=0?"+":""}${sr.toFixed(2)}R<br><span class="note">${T.length} trades · ${w} wins · ${Math.round(100*w/T.length)}% win rate</span></span></div>
+  <div class="scroll" style="margin-top:10px"><table><tr><th>Entry time (BD)</th><th>Session</th><th>Side</th><th>Entry</th><th>Exit</th><th>Result</th><th>Pips</th><th>R</th><th>Profit</th></tr>${rows}</table></div>
+  <p class="note" style="margin:8px 0 0">Profit uses your risk per trade above (1R = ${"$"}${risk.toFixed(2)}). Trades are assigned to the day they were entered and closed at TP, SL, or after 12 hours.</p>`}
+function sim(){
+  const {d,tr,pair}=LAST,pip=/JPY/i.test(pair)?.01:.0001,risk=+$("risk").value,start=+$("acct").value;
+  if(!(risk>0)||!(start>0)){$("sim").innerHTML="<p class='note'>Enter an account size and a risk amount above $0.</p>";return}
+  let bal=start,peak=start,dd=0,w=0,n=0,over=0,skip=0;const eq=[start],days={};
+  for(const t of tr){
+    const slp=Math.abs(t.e-t.sl)/pip,lt=Math.max(.01,Math.floor(risk/(slp*10)*100)/100),real=lt*slp*10;
+    if(bal<real){skip++;continue}
+    const x=t.res>0?t.tp:t.res<0?t.sl:d[t.j].c,u=(x-t.e)*t.k/Math.abs(t.e-t.sl)*real;
+    bal+=u;n++;if(u>0)w++;if(real>risk*1.05)over++;eq.push(bal);peak=Math.max(peak,bal);dd=Math.max(dd,peak-bal);
+    const k=bdDay(d[t.i].t+STEP),o=days[k]||(days[k]={n:0,u:0});o.n++;o.u+=u;o.b=bal}
+  const gain=bal-start,c=gain>=0?"BUY":"SELL",m=x=>(x<0?"−":"")+"$"+Math.abs(x).toFixed(2);
+  const W=700,H=120,hi=Math.max(...eq,start),lo=Math.min(...eq,start),Y=p=>6+(hi-p)/((hi-lo)||1)*(H-12),X=i=>i*(W-4)/Math.max(1,eq.length-1)+2;
+  const svg=`<svg viewBox="0 0 ${W} ${H}" style="margin-top:10px"><line x1="0" x2="${W}" y1="${Y(start)}" y2="${Y(start)}" stroke="var(--line)" stroke-dasharray="4 4"/><polyline fill="none" stroke="${gain>=0?"#0e8a5f":"#c2342f"}" stroke-width="2" points="${eq.map((v,i)=>X(i)+","+Y(v)).join(" ")}"/></svg>`;
+  const ds=Object.keys(days).sort().reverse().slice(0,10),rows=ds.map(k=>`<tr><td>${k}</td><td>${days[k].n}</td><td class="${days[k].u>=0?"BUY":"SELL"}">${days[k].u>=0?"+":"−"}$${Math.abs(days[k].u).toFixed(2)}</td><td>$${days[k].b.toFixed(2)}</td></tr>`).join("");
+  $("sim").innerHTML=`<p class="note" style="margin:0 0 8px">Start $${start.toFixed(2)}, risk ${m(risk)} per trade (${(100*risk/start).toFixed(0)}% of the account).</p>
+  <div class="sig"><span class="big ${c}">$${bal.toFixed(2)}</span><span>${gain>=0?"+":"−"}$${Math.abs(gain).toFixed(2)} (${(100*gain/start).toFixed(0)}%)<br><span class="note">${n} trades · ${n?Math.round(100*w/n):0}% wins · max drawdown ${m(dd)}</span></span></div>${svg}
+  ${over?`<p class="note" style="margin:8px 0 0">⚠ ${over} trades needed the smallest lot (0.01), which risks more than ${m(risk)}. With a small account, use a cent account or skip wide-stop trades.</p>`:""}
+  ${skip?`<p class="note" style="margin:8px 0 0">${skip} trades skipped because the balance was below one trade’s risk.</p>`:""}
+  ${rows?`<div class="scroll" style="margin-top:8px"><table><tr><th>Day (BD time)</th><th>Trades</th><th>Day profit</th><th>Balance</th></tr>${rows}</table></div>`:""}
+  <p class="note" style="margin:8px 0 0">Based on the selected pair’s candles with fixed-dollar risk. Demo data is random, so use real candles for a real picture. Pip value is estimated at $10 per lot.</p>`}
+let RT;["acct","risk","slm"].forEach(id=>$(id).oninput=()=>{clearTimeout(RT);RT=setTimeout(()=>{scan();run(DATA[$("pair").value])},250)});
+$("day").onchange=showDay;
+const PAIRS={EURUSD:1.085,GBPUSD:1.27,USDJPY:150,USDCHF:0.88,AUDUSD:0.66,USDCAD:1.36,NZDUSD:0.61};
+const DATA={};
+function genAll(){Object.keys(PAIRS).forEach(p=>DATA[p]=demo(PAIRS[p]))}
+function mini(d,o){
+  const v=d.slice(-40),W=120,H=36;let hi=Math.max(...v.map(x=>x.c)),lo=Math.min(...v.map(x=>x.c));
+  if(o.entry){hi=Math.max(hi,o.sl,o.tp2);lo=Math.min(lo,o.sl,o.tp2)}
+  const Y=p=>2+(hi-p)/((hi-lo)||1e-9)*(H-4),X=i=>i*W*.68/39;
+  let g=`<polyline fill="none" stroke="#4b5b6b" stroke-width="1.2" points="${v.map((x,i)=>X(i)+","+Y(x.c)).join(" ")}"/>`;
+  if(o.entry){const x0=W*.7,w=W-x0,z=(a,b,c)=>`<rect x="${x0}" y="${Math.min(Y(a),Y(b))}" width="${w}" height="${Math.abs(Y(a)-Y(b))}" fill="${c}" opacity=".4"/>`;
+    g+=z(o.entry,o.tp2,"#0e8a5f")+z(o.entry,o.sl,"#c2342f")+`<line x1="${x0}" x2="${W}" y1="${Y(o.entry)}" y2="${Y(o.entry)}" stroke="#4b5b6b"/><line x1="${X(39)}" x2="${x0}" y1="${Y(v[39].c)}" y2="${Y(o.entry)}" stroke="#4b5b6b" stroke-dasharray="2 2"/>`}
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:120px;height:36px">${g}</svg>`}
+function scan(){
+  const rows=[];let ses="";
+  Object.keys(PAIRS).forEach(p=>{const raw=DATA[p];if(!raw||raw.length<230){rows.push({p,bad:1,a:-1});return}
+    const ind=indicators(raw),o=analyse(ind,p);ses=o.r.ses;rows.push({p,ind,o,a:o.side==="WAIT"?0:1+Math.abs(o.s)/100})});
+  rows.sort((x,y)=>y.a-x.a);
+  const star=BEST[ses]||"";
+  $("scan").innerHTML=`<table><tr><th>Pair</th><th>Signal</th><th>Zones</th><th>Entry</th><th>SL</th><th>TP1</th><th>TP2</th><th>Lot</th><th>Entry (BD)</th></tr>`+rows.map(r=>{
+    if(r.bad)return `<tr data-p="${r.p}"><td>${r.p}</td><td colspan="7" class="note">Need 230+ candles</td></tr>`;
+    const o=r.o,f=x=>x.toFixed(dec(r.p)),st=r.ind[r.ind.length-1].t-r.ind[r.ind.length-2].t;
+    return `<tr data-p="${r.p}" style="cursor:pointer"><td><b>${r.p}</b>${star.includes(r.p)?" ★":""}</td><td class="${o.side}"><b>${o.side}</b> <span class="note">${o.s>0?"+":""}${o.s}</span></td><td>${mini(r.ind,o)}</td>`+(o.entry?`<td>${f(o.entry)}</td><td>${f(o.sl)}</td><td>${f(o.tp1)}</td><td>${f(o.tp2)}</td><td>${o.lot}${o.real>+$("risk").value*1.05?" ⚠":""}</td><td>${dt(o.r.t+st)}<br>${tm(o.r.t+st)}</td>`:`<td colspan="6" class="note">No trade now</td>`)+`</tr>`}).join("")+`</table>`;
+}
+$("scan").onclick=e=>{const tr=e.target.closest("tr[data-p]");if(tr){$("pair").value=tr.dataset.p;run(DATA[tr.dataset.p]);$("out").scrollIntoView({behavior:"smooth"})}};
+$("pair").onchange=()=>run(DATA[$("pair").value]);
+$("run").onclick=()=>{const t=$("csv").value.trim();if(t){const p=parse(t);if(!p.length){$("out").innerHTML="<b>Couldn’t read the data.</b> Use rows like: 2025-01-15 09:15,1.0952,1.0960,1.0948,1.0957";return}DATA[$("pair").value]=p}scan();run(DATA[$("pair").value])};
+$("demo").onclick=()=>{$("csv").value="";genAll();scan();run(DATA[$("pair").value])};
+$("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{$("csv").value=rd.result.slice(0,2e6);$("run").click()};rd.readAsText(f)};
+genAll();scan();run(DATA[$("pair").value]);
+</script>
+</body>
+</html>
